@@ -19,7 +19,7 @@ library SwapMath {
     /// @return amountOut The amount to be received, of either token0 or token1, based on the direction of the swap
     /// @return feeAmount The amount of input that will be taken as a fee
     function computeSwapStep(
-        uint160 sqrtRatioCurrentX96,//当前价格
+        uint160 sqrtRatioCurrentX96, //当前价格
         uint160 sqrtRatioTargetX96,
         uint128 liquidity,
         int256 amountRemaining,
@@ -47,9 +47,10 @@ library SwapMath {
                 ? SqrtPriceMath.getAmount0Delta(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity, true)
                 : SqrtPriceMath.getAmount1Delta(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity, true);
             // 判断余额是否充足，如果充足，那么这次交易可以到达目标交易价格，否则需要计算出当前 tokenIn 能到达的目标交易价
-            if (amountRemainingLessFee >= amountIn) sqrtRatioNextX96 = sqrtRatioTargetX96;
-            else
+            if (amountRemainingLessFee >= amountIn)
+                sqrtRatioNextX96 = sqrtRatioTargetX96;
                 // 当余额不充足的时候计算能够到达的目标交易价
+            else
                 sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
                     sqrtRatioCurrentX96,
                     liquidity,

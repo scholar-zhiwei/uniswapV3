@@ -23,7 +23,7 @@ library Tick {
         int128 liquidityNet;
         // fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
         // only has relative meaning, not absolute — the value depends on when the tick is initialized
-        //在每个有流动性的 tick 上记录外侧的手续费数量 
+        //在每个有流动性的 tick 上记录外侧的手续费数量
         uint256 feeGrowthOutside0X128;
         uint256 feeGrowthOutside1X128;
         // the cumulative tick value on the other side of the tick
@@ -73,11 +73,11 @@ library Tick {
         Info storage upper = self[tickUpper];
 
         // calculate fee growth below
-        
+
         uint256 feeGrowthBelow0X128;
         uint256 feeGrowthBelow1X128;
         if (tickCurrent >= tickLower) {
-            //feeGrowthOutside0X128在每个有流动性的 tick 上记录外侧的手续费数量 
+            //feeGrowthOutside0X128在每个有流动性的 tick 上记录外侧的手续费数量
             feeGrowthBelow0X128 = lower.feeGrowthOutside0X128;
             feeGrowthBelow1X128 = lower.feeGrowthOutside1X128;
         } else {
@@ -119,7 +119,7 @@ library Tick {
         int24 tick, //此次将要更新的tick  lowerTick 或者UpperTick
         int24 tickCurrent,
         int128 liquidityDelta,
-        uint256 feeGrowthGlobal0X128, 
+        uint256 feeGrowthGlobal0X128,
         uint256 feeGrowthGlobal1X128,
         uint160 secondsPerLiquidityCumulativeX128,
         int56 tickCumulative,
@@ -133,7 +133,7 @@ library Tick {
         uint128 liquidityGrossAfter = LiquidityMath.addDelta(liquidityGrossBefore, liquidityDelta);
 
         require(liquidityGrossAfter <= maxLiquidity, 'LO');
-        
+
         // 通过 liquidityGross 在进行 position 变化前后的值来判断 tick 是否仍被引用
         flipped = (liquidityGrossAfter == 0) != (liquidityGrossBefore == 0);
 
