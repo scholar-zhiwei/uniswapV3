@@ -19,7 +19,7 @@ library SwapMath {
     /// @return amountOut The amount to be received, of either token0 or token1, based on the direction of the swap
     /// @return feeAmount The amount of input that will be taken as a fee
     function computeSwapStep(
-        uint160 sqrtRatioCurrentX96,
+        uint160 sqrtRatioCurrentX96,//当前价格
         uint160 sqrtRatioTargetX96,
         uint128 liquidity,
         int256 amountRemaining,
@@ -36,14 +36,20 @@ library SwapMath {
     {
         bool zeroForOne = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
         bool exactIn = amountRemaining >= 0;
-
+        //假设交易是输入 x token ，余额为 x（预先扣除最大所需的手续费后的余额，以防止手续费不足），在计算得到 Δx 后，比较：
+        //当 x≥Δx 时，表示交易可以到达目标价格
+        //当 x<Δx 时，表示交易不足以到达目标价格，此时还需要进一步当前余额 xremaining 全部耗尽时所能够达到的价格
         if (exactIn) {
+            // 先将 tokenIn 的余额扣除掉最大所需的手续费
             uint256 amountRemainingLessFee = FullMath.mulDiv(uint256(amountRemaining), 1e6 - feePips, 1e6);
+            // 通过公式计算出到达目标价所需要的 tokenIn 数量，这里对 x token 和 y token 计算的公式是不一样的
             amountIn = zeroForOne
                 ? SqrtPriceMath.getAmount0Delta(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity, true)
                 : SqrtPriceMath.getAmount1Delta(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity, true);
+            // 判断余额是否充足，如果充足，那么这次交易可以到达目标交易价格，否则需要计算出当前 tokenIn 能到达的目标交易价
             if (amountRemainingLessFee >= amountIn) sqrtRatioNextX96 = sqrtRatioTargetX96;
             else
+                // 当余额不充足的时候计算能够到达的目标交易价
                 sqrtRatioNextX96 = SqrtPriceMath.getNextSqrtPriceFromInput(
                     sqrtRatioCurrentX96,
                     liquidity,

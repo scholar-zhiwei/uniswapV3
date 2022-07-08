@@ -16,11 +16,14 @@ library Tick {
     // info stored for each initialized individual tick
     struct Info {
         // the total position liquidity that references this tick
+        //全局的每单位流动性收取手续费的数量的累加变量
         uint128 liquidityGross;
         // amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left),
+        //表示当价格穿过该 tick 时，处于激活的流动性需要变化的数量
         int128 liquidityNet;
         // fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
         // only has relative meaning, not absolute — the value depends on when the tick is initialized
+        //在每个有流动性的 tick 上记录外侧的手续费数量 
         uint256 feeGrowthOutside0X128;
         uint256 feeGrowthOutside1X128;
         // the cumulative tick value on the other side of the tick
@@ -57,6 +60,7 @@ library Tick {
     /// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
     /// @return feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
     /// @return feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+    //计算tick区间的内产生的手续费
     function getFeeGrowthInside(
         mapping(int24 => Tick.Info) storage self,
         int24 tickLower,
@@ -69,9 +73,11 @@ library Tick {
         Info storage upper = self[tickUpper];
 
         // calculate fee growth below
+        
         uint256 feeGrowthBelow0X128;
         uint256 feeGrowthBelow1X128;
         if (tickCurrent >= tickLower) {
+            //feeGrowthOutside0X128在每个有流动性的 tick 上记录外侧的手续费数量 
             feeGrowthBelow0X128 = lower.feeGrowthOutside0X128;
             feeGrowthBelow1X128 = lower.feeGrowthOutside1X128;
         } else {
@@ -89,7 +95,7 @@ library Tick {
             feeGrowthAbove0X128 = feeGrowthGlobal0X128 - upper.feeGrowthOutside0X128;
             feeGrowthAbove1X128 = feeGrowthGlobal1X128 - upper.feeGrowthOutside1X128;
         }
-
+        //获得者两个tick区间产生的手续费
         feeGrowthInside0X128 = feeGrowthGlobal0X128 - feeGrowthBelow0X128 - feeGrowthAbove0X128;
         feeGrowthInside1X128 = feeGrowthGlobal1X128 - feeGrowthBelow1X128 - feeGrowthAbove1X128;
     }
@@ -107,12 +113,13 @@ library Tick {
     /// @param upper true for updating a position's upper tick, or false for updating a position's lower tick
     /// @param maxLiquidity The maximum liquidity allocation for a single tick
     /// @return flipped Whether the tick was flipped from initialized to uninitialized, or vice versa
+    //在添加流动性时，我们会初始化或更新此 position 对应的 lower/upper tick
     function update(
         mapping(int24 => Tick.Info) storage self,
-        int24 tick,
+        int24 tick, //此次将要更新的tick  lowerTick 或者UpperTick
         int24 tickCurrent,
         int128 liquidityDelta,
-        uint256 feeGrowthGlobal0X128,
+        uint256 feeGrowthGlobal0X128, 
         uint256 feeGrowthGlobal1X128,
         uint160 secondsPerLiquidityCumulativeX128,
         int56 tickCumulative,
@@ -121,14 +128,17 @@ library Tick {
         uint128 maxLiquidity
     ) internal returns (bool flipped) {
         Tick.Info storage info = self[tick];
-
+        // 获取此 tick 更新之前的流动性
         uint128 liquidityGrossBefore = info.liquidityGross;
         uint128 liquidityGrossAfter = LiquidityMath.addDelta(liquidityGrossBefore, liquidityDelta);
 
         require(liquidityGrossAfter <= maxLiquidity, 'LO');
-
+        
+        // 通过 liquidityGross 在进行 position 变化前后的值来判断 tick 是否仍被引用
         flipped = (liquidityGrossAfter == 0) != (liquidityGrossBefore == 0);
 
+        // 如果 tick 在更新之前的 liquidityGross 为 0，那么表示我们本次为初始化操作
+        // 这里会初始化 tick 中的 f_o
         if (liquidityGrossBefore == 0) {
             // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
             if (tick <= tickCurrent) {
@@ -144,6 +154,7 @@ library Tick {
         info.liquidityGross = liquidityGrossAfter;
 
         // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+        //价格经过lowerTick则加上liquidityNet，经过upper则减去liquidityNet
         info.liquidityNet = upper
             ? int256(info.liquidityNet).sub(liquidityDelta).toInt128()
             : int256(info.liquidityNet).add(liquidityDelta).toInt128();

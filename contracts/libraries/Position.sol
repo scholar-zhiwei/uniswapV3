@@ -9,14 +9,17 @@ import './LiquidityMath.sol';
 /// @notice Positions represent an owner address' liquidity between a lower and upper tick boundary
 /// @dev Positions store additional state for tracking fees owed to the position
 library Position {
-    // info stored for each user's position
+    //存储的是每个用户的position
     struct Info {
         // the amount of liquidity owned by this position
+        //这个owned在这个position的流动性数量
         uint128 liquidity;
         // fee growth per unit of liquidity as of the last update to liquidity or fees owed
+        //这个position的token0所积累的手续费
         uint256 feeGrowthInside0LastX128;
         uint256 feeGrowthInside1LastX128;
         // the fees owed to the position owner in token0/token1
+        //当移除流动性时合约欠用户的token0和token1的数量
         uint128 tokensOwed0;
         uint128 tokensOwed1;
     }
