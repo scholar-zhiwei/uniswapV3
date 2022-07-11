@@ -36,6 +36,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
+    // Oracle 相关操作的库
     using Oracle for Oracle.Observation[65535];
 
     /// @inheritdoc IUniswapV3PoolImmutables
@@ -58,13 +59,14 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     struct Slot0 {
         // the current price
         uint160 sqrtPriceX96;
-        // the current tick
+        //此时价格对应的tick
         int24 tick;
-        // the most-recently updated index of the observations array
+        // 记录了最近一次 Oracle 记录在 Oracle 数组中的索引位置
         uint16 observationIndex;
-        // the current maximum number of observations that are being stored
+         // 已经存储的 Oracle 数量
         uint16 observationCardinality;
-        // the next maximum number of observations to store, triggered in observations.write
+        // 可用的 Oracle 空间，此值初始时会被设置为 1，后续根据需要来可以扩展
+        //当数组可用大小写满之后，它会重新从 0 开始写入，
         uint16 observationCardinalityNext;
         // the current protocol fee as a percentage of the swap fee taken on withdrawal
         // represented as an integer denominator (1/x)%
@@ -100,6 +102,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     /// @inheritdoc IUniswapV3PoolState
     mapping(bytes32 => Position.Info) public override positions;
     /// @inheritdoc IUniswapV3PoolState
+    // 使用数据记录 Oracle 的值
     Oracle.Observation[65535] public override observations;
 
     /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
@@ -237,6 +240,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     }
 
     /// @inheritdoc IUniswapV3PoolDerivedState
+    //开发者（需要最近的价格）调用的函数
     function observe(uint32[] calldata secondsAgos)
         external
         view
@@ -256,6 +260,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     }
 
     /// @inheritdoc IUniswapV3PoolActions
+    //扩展交易池的 Oracle 数组可用容量，传入的参数为期望存储的历史数据个数。
     function increaseObservationCardinalityNext(uint16 observationCardinalityNext)
         external
         override
@@ -587,35 +592,36 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     // the top level state of the swap, the results of which are recorded in storage at the end
     struct SwapState {
         // the amount remaining to be swapped in/out of the input/output asset
+        //交易剩余的xToken数
         int256 amountSpecifiedRemaining;
-        // the amount already swapped out/in of the output/input asset
+        // 已经交换出的yToken的数量
         int256 amountCalculated;
-        // current sqrt(price)
+        // 现在的价格 根号p 进行存储
         uint160 sqrtPriceX96;
         // the tick associated with the current price
         int24 tick;
-        // the global fee growth of the input token
+        //xToken的总手续费
         uint256 feeGrowthGlobalX128;
         // amount of input token paid as protocol fee
         uint128 protocolFee;
-        // the current liquidity in range
+        // 目前区间内的流动性
         uint128 liquidity;
     }
 
     struct StepComputations {
         // the price at the beginning of the step
         uint160 sqrtPriceStartX96;
-        // the next tick to swap to from the current tick in the swap direction
+        //即切换到下一个tick 间隔tickspacing
         int24 tickNext;
-        // whether tickNext is initialized or not
+        // 下一个tick是否被初始化
         bool initialized;
-        // sqrt(price) for the next tick (1/0)
+        //下一个tick的价格
         uint160 sqrtPriceNextX96;
-        // how much is being swapped in in this step
+        //这个区间消耗多少xToken
         uint256 amountIn;
-        // how much is being swapped out
+        //这个区间交换出多少yToken
         uint256 amountOut;
-        // how much fee is being paid in
+        //多少手续费需要支付
         uint256 feeAmount;
     }
 
@@ -669,6 +675,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             });
 
         // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
+        //amountSpecifiedRemaining需要交换的tokenIn数，换出tokenOut
         while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
             StepComputations memory step;
 
@@ -707,10 +714,14 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             );
 
             // 更新 tokenIn 的余额，以及 tokenOut 数量，注意当指定 tokenIn 的数量进行交易时，这里的 tokenOut 是负数
+            //step.amountIn这个tick消耗的tokenIn
             if (exactInput) {
+                //if进入则用户指定的是输入，更新剩余需要swap的xToken和已经交换出的yToken
                 state.amountSpecifiedRemaining -= (step.amountIn + step.feeAmount).toInt256();
+                //state.amountCalculated已经交换出的tokenOut的数量
                 state.amountCalculated = state.amountCalculated.sub(step.amountOut.toInt256());
             } else {
+                //用户指定的是输出  yToken
                 state.amountSpecifiedRemaining += step.amountOut.toInt256();
                 state.amountCalculated = state.amountCalculated.add((step.amountIn + step.feeAmount).toInt256());
             }
@@ -723,6 +734,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             }
 
             // update global fee tracker
+            // 更新交易的 fg，这里需要除以流动性 L   fg 表示代币池收取的手续费总额
             if (state.liquidity > 0)
                 state.feeGrowthGlobalX128 += FullMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
 
@@ -739,13 +751,18 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                         (cache.tickCumulative, cache.secondsPerLiquidityCumulativeX128) = observations.observeSingle(
                             cache.blockTimestamp,
                             0,
+                            // 交易前的价格的 tick ，如前文所述，这样做是为了防止攻击
                             slot0Start.tick,
+                            // 交易前的最新 Oracle 索引
                             slot0Start.observationIndex,
+                            // 交易前的价格对应的流动性
                             cache.liquidityStart,
+                            // 当前的 Oracle 数量
                             slot0Start.observationCardinality
                         );
                         cache.computedLatestObservation = true;
                     }
+                    // 在这里需要更新 tick 的 f_o
                     int128 liquidityNet =
                         ticks.cross(
                             step.tickNext,
@@ -771,7 +788,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             }
         }
 
-        // update tick and write an oracle entry if the tick change
+        // 检查价格是否发生了变化，当价格变化时，需要写入一个 Oracle 数据
         if (state.tick != slot0Start.tick) {
             (uint16 observationIndex, uint16 observationCardinality) =
                 observations.write(
@@ -782,6 +799,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
                     slot0Start.observationCardinality,
                     slot0Start.observationCardinalityNext
                 );
+            // 更新最新 Oracle 指向的索引信息以及当前 Oracle 数据的总数目
             (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) = (
                 state.sqrtPriceX96,
                 state.tick,
@@ -811,9 +829,9 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             : (state.amountCalculated, amountSpecified - state.amountSpecifiedRemaining);
 
         // do the transfers and collect payment
+        // zeroForOne判断交易的方向，即价格降低或升高
         if (zeroForOne) {
             if (amount1 < 0) TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
-
             uint256 balance0Before = balance0();
             IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
             require(balance0Before.add(uint256(amount0)) <= balance0(), 'IIA');

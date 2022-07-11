@@ -10,13 +10,15 @@ pragma solidity >=0.5.0 <0.8.0;
 /// The most recent observation is available, independent of the length of the oracle array, by passing 0 to observe()
 library Oracle {
     struct Observation {
-        // the block timestamp of the observation
+        // 记录区块的时间戳
         uint32 blockTimestamp;
         // the tick accumulator, i.e. tick * time elapsed since the pool was first initialized
+        // tick index 的时间加权累积值
         int56 tickCumulative;
         // the seconds per liquidity, i.e. seconds elapsed / max(1, liquidity) since the pool was first initialized
+        // 价格所在区间的流动性的时间加权累积值
         uint160 secondsPerLiquidityCumulativeX128;
-        // whether or not the observation is initialized
+        // 是否已经被初始化
         bool initialized;
     }
 
@@ -204,28 +206,30 @@ library Oracle {
         uint128 liquidity,
         uint16 cardinality
     ) private view returns (Observation memory beforeOrAt, Observation memory atOrAfter) {
-        // optimistically set before to the newest observation
+        // 先把 beforeOrAt 设置为当前最新数据
         beforeOrAt = self[index];
 
-        // if the target is chronologically at or after the newest observation, we can early return
+        // 检查 beforeOrAt 是否 <= target
         if (lte(time, beforeOrAt.blockTimestamp, target)) {
             if (beforeOrAt.blockTimestamp == target) {
-                // if newest observation equals target, we're in the same block, so we can ignore atOrAfter
+                // 如果时间戳相等，那么可以忽略 atOrAfter 直接返回
                 return (beforeOrAt, atOrAfter);
             } else {
-                // otherwise, we need to transform
+                // 当前区块中发生代币对的交易之前请求此函数时可能会发生这种情况
+                // 需要将当前还未持久化的数据，封装成一个 Oracle 数据返回，
                 return (beforeOrAt, transform(beforeOrAt, target, tick, liquidity));
             }
         }
 
-        // now, set before to the oldest observation
+        // 将 beforeOrAt 调整至 Oracle 数组中最老的数据
+        // 即为当前 index 的下一个数据，或者 index 为 0 的数据
         beforeOrAt = self[(index + 1) % cardinality];
         if (!beforeOrAt.initialized) beforeOrAt = self[0];
 
         // ensure that the target is chronologically at or after the oldest observation
         require(lte(time, beforeOrAt.blockTimestamp, target), 'OLD');
 
-        // if we've reached this point, we have to binary search
+        // 然后通过二分查找的方式找到离目标时间点最近的前后两个 Oracle 数据
         return binarySearch(self, time, target, index, cardinality);
     }
 
@@ -247,29 +251,36 @@ library Oracle {
         uint32 time,
         uint32 secondsAgo,
         int24 tick,
-        uint16 index,
+        uint16 index, //数组最后一个元素的索引
         uint128 liquidity,
-        uint16 cardinality
+        uint16 cardinality //数组元素的个数
     ) internal view returns (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) {
+        //表示请求 N 秒前的数据    secondsAgo 为 0 表示当前的最新 Oracle 数据
         if (secondsAgo == 0) {
+            // 获取当前的 Oracle 数据
             Observation memory last = self[index];
+            // 如前文所述，同一个区块内，只会在第一笔交易中写入 Oracle 数据
             if (last.blockTimestamp != time) last = transform(last, time, tick, liquidity);
             return (last.tickCumulative, last.secondsPerLiquidityCumulativeX128);
         }
 
+        // 计算出请求的时间戳
         uint32 target = time - secondsAgo;
 
+        // 计算出请求时间戳最近的两个 Oracle 数据
         (Observation memory beforeOrAt, Observation memory atOrAfter) =
             getSurroundingObservations(self, time, target, tick, index, liquidity, cardinality);
 
+        // 如果请求时间和返回的左侧时间戳吻合，那么可以直接使用
         if (target == beforeOrAt.blockTimestamp) {
             // we're at the left boundary
             return (beforeOrAt.tickCumulative, beforeOrAt.secondsPerLiquidityCumulativeX128);
+        // 如果请求时间和返回的右侧时间戳吻合，那么可以直接使用
         } else if (target == atOrAfter.blockTimestamp) {
             // we're at the right boundary
             return (atOrAfter.tickCumulative, atOrAfter.secondsPerLiquidityCumulativeX128);
         } else {
-            // we're in the middle
+            // 当请求的时间在中间时，计算根据增长率计算出请求的时间点的 Oracle 值并返回
             uint32 observationTimeDelta = atOrAfter.blockTimestamp - beforeOrAt.blockTimestamp;
             uint32 targetDelta = target - beforeOrAt.blockTimestamp;
             return (
