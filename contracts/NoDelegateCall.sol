@@ -6,6 +6,7 @@ pragma solidity =0.7.6;
 abstract contract NoDelegateCall {
     /// @dev The original address of this contract
     address private immutable original;
+
     //test
     constructor() {
         original = address(this);
