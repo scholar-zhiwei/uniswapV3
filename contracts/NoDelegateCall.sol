@@ -10,6 +10,7 @@ abstract contract NoDelegateCall {
     constructor() {
         original = address(this);
     }
+
     //1111
     /// @dev Private method is used instead of inlining into modifier because modifiers are copied into each method,
     ///     and the use of immutable means the address bytes are copied in every place the modifier is used.
