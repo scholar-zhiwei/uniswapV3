@@ -63,7 +63,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         int24 tick;
         // 记录了最近一次 Oracle 记录在 Oracle 数组中的索引位置
         uint16 observationIndex;
-         // 已经存储的 Oracle 数量
+        // 已经存储的 Oracle 数量
         uint16 observationCardinality;
         // 可用的 Oracle 数据，此值初始时会被设置为 1，后续根据需要来可以扩展
         //当数组可用大小写满之后，它会重新从 0 开始写入，

@@ -256,7 +256,7 @@ library Oracle {
         Observation[65535] storage self,
         uint32 time,
         uint32 secondsAgo, //若一个小时前的数据则为3600s
-        int24 tick,  //当前价格对应的tick
+        int24 tick, //当前价格对应的tick
         uint16 index, //数组最后一个元素的索引
         uint128 liquidity,
         uint16 cardinality //数组元素的个数
@@ -272,7 +272,7 @@ library Oracle {
             return (last.tickCumulative, last.secondsPerLiquidityCumulativeX128);
         }
 
-        // 计算出请求的时间戳  
+        // 计算出请求的时间戳
         uint32 target = time - secondsAgo;
 
         // 计算出请求时间戳最近的两个 Oracle 数据
@@ -283,7 +283,7 @@ library Oracle {
         if (target == beforeOrAt.blockTimestamp) {
             // we're at the left boundary
             return (beforeOrAt.tickCumulative, beforeOrAt.secondsPerLiquidityCumulativeX128);
-        // 如果请求时间和返回的右侧时间戳吻合，那么可以直接使用
+            // 如果请求时间和返回的右侧时间戳吻合，那么可以直接使用
         } else if (target == atOrAfter.blockTimestamp) {
             // we're at the right boundary
             return (atOrAfter.tickCumulative, atOrAfter.secondsPerLiquidityCumulativeX128);
