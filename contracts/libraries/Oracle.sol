@@ -77,18 +77,19 @@ library Oracle {
     /// @param cardinalityNext The new length of the oracle array, independent of population
     /// @return indexUpdated The new index of the most recently written element in the oracle array
     /// @return cardinalityUpdated The new cardinality of the oracle array
+    //将oracle数据写入数组，每个block最多可写一次
     function write(
         Observation[65535] storage self,
-        uint16 index,
+        uint16 index, //数组最后一个元素的下标
         uint32 blockTimestamp,
         int24 tick,
         uint128 liquidity,
-        uint16 cardinality,
+        uint16 cardinality, //数组的元素个数
         uint16 cardinalityNext
     ) internal returns (uint16 indexUpdated, uint16 cardinalityUpdated) {
         Observation memory last = self[index];
 
-        // early return if we've already written an observation this block
+        // 如果这个区块已经写入值了则不更新，因为每个区块只能发生一次更新
         if (last.blockTimestamp == blockTimestamp) return (index, cardinality);
 
         // if the conditions are right, we can bump the cardinality
@@ -97,7 +98,7 @@ library Oracle {
         } else {
             cardinalityUpdated = cardinality;
         }
-
+        //获取最新将要增加的元素的下标，并在该位置给数组赋值
         indexUpdated = (index + 1) % cardinalityUpdated;
         self[indexUpdated] = transform(last, blockTimestamp, tick, liquidity);
     }
@@ -107,6 +108,7 @@ library Oracle {
     /// @param current The current next cardinality of the oracle array
     /// @param next The proposed next cardinality which will be populated in the oracle array
     /// @return next The next cardinality which will be populated in the oracle array
+    //扩容
     function grow(
         Observation[65535] storage self,
         uint16 current,
@@ -118,6 +120,9 @@ library Oracle {
         // store in each slot to prevent fresh SSTOREs in swaps
         // this data will not be used because the initialized boolean is still false
         for (uint16 i = current; i < next; i++) self[i].blockTimestamp = 1;
+        // 这里可以看到，通过循环的方式，将 Oracle 数组中未来可能被使用的空间中写入数据。
+        //这样做的目的是将数据进行初始化，这样在代币交易写入新的 Oracle 数据时，不需要再进行初始化，
+        //可以让交易时更新 Oracle 不至于花费太多的 gas，
         return next;
     }
 
@@ -197,6 +202,7 @@ library Oracle {
     /// @param cardinality The number of populated elements in the oracle array
     /// @return beforeOrAt The observation which occurred at, or before, the given timestamp
     /// @return atOrAfter The observation which occurred at, or after, the given timestamp
+    //获得离target时间戳最近的两个Oracle值
     function getSurroundingObservations(
         Observation[65535] storage self,
         uint32 time,
@@ -249,8 +255,8 @@ library Oracle {
     function observeSingle(
         Observation[65535] storage self,
         uint32 time,
-        uint32 secondsAgo,
-        int24 tick,
+        uint32 secondsAgo, //若一个小时前的数据则为3600s
+        int24 tick,  //当前价格对应的tick
         uint16 index, //数组最后一个元素的索引
         uint128 liquidity,
         uint16 cardinality //数组元素的个数
@@ -260,11 +266,13 @@ library Oracle {
             // 获取当前的 Oracle 数据
             Observation memory last = self[index];
             // 如前文所述，同一个区块内，只会在第一笔交易中写入 Oracle 数据
+            //last.blockTimestamp != time 表示未更新当前的Oracle数据，则需更新
             if (last.blockTimestamp != time) last = transform(last, time, tick, liquidity);
+            //返回最新的Oracle数据
             return (last.tickCumulative, last.secondsPerLiquidityCumulativeX128);
         }
 
-        // 计算出请求的时间戳
+        // 计算出请求的时间戳  
         uint32 target = time - secondsAgo;
 
         // 计算出请求时间戳最近的两个 Oracle 数据
@@ -308,6 +316,7 @@ library Oracle {
     /// @param cardinality The number of populated elements in the oracle array
     /// @return tickCumulatives The tick * time elapsed since the pool was first initialized, as of each `secondsAgo`
     /// @return secondsPerLiquidityCumulativeX128s The cumulative seconds / max(1, liquidity) since the pool was first initialized, as of each `secondsAgo`
+    //获取
     function observe(
         Observation[65535] storage self,
         uint32 time,

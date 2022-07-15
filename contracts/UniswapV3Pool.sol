@@ -65,7 +65,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         uint16 observationIndex;
          // 已经存储的 Oracle 数量
         uint16 observationCardinality;
-        // 可用的 Oracle 空间，此值初始时会被设置为 1，后续根据需要来可以扩展
+        // 可用的 Oracle 数据，此值初始时会被设置为 1，后续根据需要来可以扩展
         //当数组可用大小写满之后，它会重新从 0 开始写入，
         uint16 observationCardinalityNext;
         // the current protocol fee as a percentage of the swap fee taken on withdrawal
@@ -93,6 +93,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
     ProtocolFees public override protocolFees;
 
     /// @inheritdoc IUniswapV3PoolState
+    //该池子的总流动性
     uint128 public override liquidity;
 
     /// @inheritdoc IUniswapV3PoolState
@@ -241,6 +242,19 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
 
     /// @inheritdoc IUniswapV3PoolDerivedState
     //开发者（需要最近的价格）调用的函数
+    /*
+    参数 secondsAgos 是一个数组，数组的每个元素可以指定离当前时间之前的秒数。
+    比如我们想要获取最近 1 小时的 TWAP，那可传入数组 [3600, 0]，
+    会查询两个时间点的累计值，3600 表示查询 1 小时前的累计值，0 则表示当前时间的累计值。
+    返回的 tickCumulatives 就是对应于入参数组的每个时间点的 tick 累计值，
+    secondsPerLiquidityCumulativeX128s 则是对应每个时间点的每秒流动性累计值，这个一般很少用到
+
+    得到了这两个时间点的 tickCumulatives 之后，就可以算出平均加权的 tick 了。以 1 小时的时间间隔为例，计算平均加权的 tick 公式为：
+    averageTick = tickCumulative[1] - tickCumulative[0] / 3600
+    tickCumulative[1] 为当前时间的 tick 累计值，tickCumulative[0] 则为 1 小时前的 tick 累计值。
+    计算得到 averageTick 之后，还需要将其转换为价格
+
+    */
     function observe(uint32[] calldata secondsAgos)
         external
         view
@@ -267,7 +281,9 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         lock
         noDelegateCall
     {
+        //现在存储的Oracle数据个数
         uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
+        //扩容之后存储的数据个数
         uint16 observationCardinalityNextNew =
             observations.grow(observationCardinalityNextOld, observationCardinalityNext);
         slot0.observationCardinalityNext = observationCardinalityNextNew;
