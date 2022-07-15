@@ -337,7 +337,8 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
             int256 amount0,
             int256 amount1
         )
-    {   //检查Tick是否合法
+    {
+        //检查Tick是否合法
         checkTicks(params.tickLower, params.tickUpper);
 
         Slot0 memory _slot0 = slot0; // SLOAD for gas optimization
@@ -498,7 +499,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         address recipient,
         int24 tickLower,
         int24 tickUpper,
-        uint128 amount,//用户将会获取的流动性数量
+        uint128 amount, //用户将会获取的流动性数量
         bytes calldata data
     ) external override lock returns (uint256 amount0, uint256 amount1) {
         require(amount > 0);
@@ -655,7 +656,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         Slot0 memory slot0Start = slot0;
 
         require(slot0Start.unlocked, 'LOK');
-        
+
         require(
             zeroForOne
                 ? sqrtPriceLimitX96 < slot0Start.sqrtPriceX96 && sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO
@@ -665,7 +666,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         // 防止交易过程中回调到合约中其他的函数中修改状态变量
         slot0.unlocked = false;
 
-       // 这里也是缓存交易前的数据，节省 gas
+        // 这里也是缓存交易前的数据，节省 gas
         SwapCache memory cache =
             SwapCache({
                 liquidityStart: liquidity,
@@ -695,7 +696,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
         while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
             StepComputations memory step;
 
-             // 交易的起始价格
+            // 交易的起始价格
             step.sqrtPriceStartX96 = state.sqrtPriceX96;
 
             // 通过位图找到下一个可以选的交易价格，这里可能是下一个流动性的边界，也可能还是在本流动性中
@@ -756,7 +757,7 @@ contract UniswapV3Pool is IUniswapV3Pool, NoDelegateCall {
 
             // shift tick if we reached the next price
             //如果我们达到了下一个价格，就跳到下一个tick
-             // 按需决定是否需要更新流动性 L 的值
+            // 按需决定是否需要更新流动性 L 的值
             if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
                 // if the tick is initialized, run the tick transition
                 // 检查 tick index 是否为另一个流动性的边界，是否被初始化
